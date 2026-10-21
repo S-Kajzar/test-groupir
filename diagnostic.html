@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagnostic du poste — Suivi des élèves</title>
+<meta name="description" content="Vérifie que le navigateur et le réseau de l'établissement permettent d'utiliser le suivi des élèves.">
+<link rel="stylesheet" href="portail.css">
+</head>
+<body>
+<header class="entete"><div class="dedans"><a class="marque" href="./">Suivi <span>des élèves</span></a></div></header>
+
+<main class="page">
+  <h1>Diagnostic du poste</h1>
+  <p class="chapeau">À lancer sur un poste du lycée, et sur une tablette, avant la première séance : il vérifie que le
+    navigateur et le réseau de l'établissement permettent d'utiliser le suivi. Il n'enregistre rien.</p>
+  <p class="bandeau-demo" id="bandeau-demo" hidden>Mode démonstration actif dans ce navigateur : l'essai de connexion
+    utilise les comptes de démonstration ; les contrôles du réseau testent toujours le vrai projet.
+    <a href="?suivi=reel">Revenir au mode réel</a>.</p>
+
+  <section class="bloc" aria-labelledby="t-projet">
+    <h2 id="t-projet">Projet Supabase testé</h2>
+    <p class="small">Prérempli par <code>config.js</code>. Ces deux valeurs sont publiques. Ne colle jamais ici la clé
+      secrète (<code>service_role</code> ou <code>sb_secret_…</code>).</p>
+    <form id="form-diag" novalidate>
+      <div class="grille-2">
+        <div class="champ"><label for="url">Adresse du projet</label>
+          <input id="url" type="url" placeholder="https://abcd1234.supabase.co" autocomplete="off" spellcheck="false"></div>
+        <div class="champ"><label for="cle">Clé publique</label>
+          <input id="cle" type="text" placeholder="sb_publishable_… ou eyJ…" autocomplete="off" spellcheck="false"></div>
+      </div>
+      <div class="actions"><button class="btn" type="submit" id="lancer">Lancer le diagnostic</button></div>
+    </form>
+  </section>
+
+  <section class="bloc" aria-labelledby="t-resultats" id="resultats" hidden>
+    <h2 id="t-resultats">Résultats</h2>
+    <p class="bilan" id="bilan" role="status"></p>
+    <ol class="controles" id="controles"></ol>
+    <div class="actions">
+      <button class="btn secondaire" type="button" id="copier">Copier le rapport</button>
+      <span class="small" id="copie-etat" role="status"></span>
+    </div>
+    <textarea class="rapport" id="rapport" readonly hidden aria-label="Rapport du diagnostic"></textarea>
+  </section>
+
+  <section class="bloc" aria-labelledby="t-connexion">
+    <h2 id="t-connexion">Essai de connexion (facultatif)</h2>
+    <p class="small">Vérifie un compte, puis se déconnecte aussitôt : rien ne reste sur le poste.</p>
+    <p class="message attention" id="session-ouverte" hidden></p>
+    <form id="form-connexion" novalidate>
+      <div class="grille-2">
+        <div class="champ"><label for="identifiant">Identifiant</label>
+          <input id="identifiant" autocomplete="username" spellcheck="false" autocapitalize="none"></div>
+        <div class="champ"><label for="mdp">Mot de passe</label>
+          <input id="mdp" type="password" autocomplete="current-password"></div>
+      </div>
+      <div class="actions"><button class="btn" type="submit" id="essayer">Essayer</button></div>
+      <p class="message" id="message-connexion" role="status"></p>
+    </form>
+  </section>
+</main>
+
+<script src="config.js"></script>
+<script src="module/suivi.js"></script>
+<script>/* Diagnostic : chaque contrôle rend { statut: ok | attention | ko | info, detail, conseil }. Les appels au réseau
+   passent par fetch directement (pas par le module), pour tester le vrai projet même en démonstration. */
+(function () {
+  "use strict";
+  var DELAI = 8000;
+  var LIBELLES = { ok: "OK", attention: "À vérifier", ko: "Problème", info: "Info", attente: "En cours" };
+  function $(s) { return document.querySelector(s); }
+  var C = window.__SUIVI__ || {};
+  $("#url").value = C.url || "";
+  $("#cle").value = C.cle || "";
+  $("#bandeau-demo").hidden = !Suivi.demo.active();
+
+  function demander(adresse, init) {
+    var ctrl = typeof AbortController === "function" ? new AbortController() : null;
+    var minuteur = setTimeout(function () { if (ctrl) ctrl.abort(); }, DELAI);
+    var debut = Date.now();
+    return fetch(adresse, Object.assign({ cache: "no-store", signal: ctrl ? ctrl.signal : undefined }, init)).then(function (r) {
+      clearTimeout(minuteur);
+      return r.text().then(function (t) {
+        var d = null;
+        try { d = t ? JSON.parse(t) : null; } catch (e) { d = t; }
+        return { status: r.status, donnees: d, entetes: r.headers, ms: Date.now() - debut };
+      });
+    }, function (e) {
+      clearTimeout(minuteur);
+      return { status: 0, erreur: e && e.name === "AbortError" ? "pas de réponse en " + DELAI / 1000 + " s" : "requête bloquée",
+        ms: Date.now() - debut };
+    });
+  }
+  function entetes(cle) {
+    var h = { apikey: cle, "Content-Type": "application/json" };
+    if (/^eyJ/.test(cle)) h.Authorization = "Bearer " + cle;
+    return h;
+  }
+  function roleDuJeton(cle) {
+    try {
+      var p = cle.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+      return JSON.parse(atob(p + "===".slice(0, (4 - p.length % 4) % 4))).role || null;
+    } catch (e) { return null; }
+  }
+  function estSecrete(cle) { return /^sb_secret_/.test(cle) || roleDuJeton(cle) === "service_role"; }
+  function hote(url) { try { return new URL(url).host; } catch (e) { return url; } }
+  var RESEAU = function (url) {
+    return "Le réseau bloque l'accès à " + hote(url) + " : demande au responsable informatique d'autoriser " +
+      "*.supabase.co (HTTPS, port 443) dans le filtrage de l'établissement.";
+  };
+  var CLE_REFUSEE = "Clé publique refusée : recopie-la depuis Supabase > Project Settings > API Keys.";
+
+  // ---------- les contrôles
+  var CONTROLES = [
+    { id: "navigateur", nom: "Navigateur", f: function () {
+      var manques = [];
+      if (typeof fetch !== "function") manques.push("fetch");
+      if (typeof Promise !== "function") manques.push("Promise");
+      if (typeof URLSearchParams !== "function") manques.push("URLSearchParams");
+      if (!(window.crypto && window.crypto.getRandomValues)) manques.push("crypto");
+      var stockage = false;
+      try {
+        localStorage.setItem("suivi.diagnostic", "1");
+        stockage = localStorage.getItem("suivi.diagnostic") === "1";
+        localStorage.removeItem("suivi.diagnostic");
+      } catch (e) { stockage = false; }
+      var r = { detail: navigator.userAgent };
+      if (manques.length) return Object.assign(r, { statut: "ko", conseil: "Navigateur trop ancien (" + manques.join(", ") +
+        " absent) : mets à jour Chrome, Edge, Firefox ou Safari." });
+      if (!stockage) return Object.assign(r, { statut: "ko", conseil: "Le navigateur refuse l'enregistrement local " +
+        "(navigation privée, ou réglage de l'établissement) : la connexion ne tiendra pas d'une page à l'autre." });
+      if (navigator.onLine === false) return Object.assign(r, { statut: "ko", conseil: "Le poste est hors ligne." });
+      return Object.assign(r, { statut: "ok" });
+    } },
+    { id: "configuration", nom: "Adresse et clé du projet", f: function (p) {
+      if (!p.url || !p.cle) return { statut: "ko", detail: "Adresse ou clé absente.", arret: true,
+        conseil: "Renseigne-les ci-dessus (Supabase > Project Settings > API Keys), ou dans config.js." };
+      if (!/^https:\/\/[^\/\s]+$/.test(p.url)) return { statut: "ko", detail: "Adresse invalide : " + p.url, arret: true,
+        conseil: "Elle commence par https:// et s'arrête au nom du projet, par exemple https://abcd1234.supabase.co." };
+      if (estSecrete(p.cle)) return { statut: "ko", detail: "C'est la clé secrète.", arret: true,
+        conseil: "Ne la colle jamais dans une page : remplace-la par la clé publique (anon ou publishable). " +
+          "Si elle a été publiée par erreur, régénère-la dans Supabase." };
+      return { statut: "ok", detail: hote(p.url) + " · " + (/^eyJ/.test(p.cle) ? "ancienne clé anon" : "clé publishable") };
+    } },
+    { id: "authentification", nom: "Service de connexion", f: function (p) {
+      return demander(p.url + "/auth/v1/health", { headers: { apikey: p.cle } }).then(function (r) {
+        if (!r.status) return { statut: "ko", detail: r.erreur, conseil: RESEAU(p.url) };
+        if (r.status === 401 || r.status === 403) return { statut: "ko", detail: "statut " + r.status, conseil: CLE_REFUSEE };
+        if (r.status === 200) return { statut: "ok", detail: "répond en " + r.ms + " ms" };
+        return { statut: "attention", detail: "statut " + r.status + " inattendu" };
+      });
+    } },
+    { id: "base", nom: "Base de données", f: function (p) {
+      return demander(p.url + "/rest/v1/rpc/ping", { method: "POST", headers: entetes(p.cle), body: "{}" }).then(function (r) {
+        if (!r.status) return { statut: "ko", detail: r.erreur, conseil: RESEAU(p.url) };
+        if (r.status === 200 && r.donnees === "ok") return { statut: "ok", detail: "schéma installé, répond en " + r.ms + " ms" };
+        if (r.status === 404 || (r.donnees && r.donnees.code === "PGRST202")) return { statut: "ko", detail: "fonction ping absente",
+          conseil: "Schéma non installé : exécute supabase/schema.sql dans Supabase > SQL Editor (docs/INSTALLATION.md, étape 4)." };
+        if (r.status === 401 || r.status === 403) return { statut: "ko", detail: "statut " + r.status, conseil: CLE_REFUSEE };
+        return { statut: "attention", detail: "statut " + r.status + " inattendu" };
+      });
+    } },
+    { id: "fonction", nom: "Fonction gestion-eleves", f: function (p) {
+      var h = { apikey: p.cle, "Content-Type": "application/json" };
+      return demander(p.url + "/functions/v1/gestion-eleves", { method: "POST", headers: h, body: '{"action":"diagnostic"}' })
+        .then(function (r) {
+          var d = r.donnees && typeof r.donnees === "object" ? r.donnees : {};
+          if (r.status === 401 && d.erreur === "Connexion requise.") {
+            return { statut: "ok", detail: "déployée ; refuse les appels sans compte, comme prévu" };
+          }
+          if (r.status === 500 && d.erreur) return { statut: "ko", detail: d.erreur,
+            conseil: "Ajoute le secret CLE_SECRETE à la fonction (docs/INSTALLATION.md, étape 5)." };
+          if (r.status === 401) return { statut: "attention", detail: "la passerelle de Supabase refuse l'appel avant la fonction",
+            conseil: "Désactive la vérification JWT de la fonction (Edge Functions > gestion-eleves > Details, étape 5) : " +
+              "la fonction vérifie elle-même le compte." };
+          if (r.status === 404) return { statut: "ko", detail: "fonction absente",
+            conseil: "Déploie la fonction gestion-eleves (docs/INSTALLATION.md, étape 5)." };
+          if (!r.status) return { statut: "ko", detail: r.erreur, conseil: "Fonction non déployée, ou vérification JWT active : " +
+            "vérifie l'étape 5. Si les contrôles précédents sont verts, le réseau n'est pas en cause." };
+          return { statut: "attention", detail: "statut " + r.status + " inattendu" };
+        });
+    } },
+    { id: "cours", nom: "Cours Habitat-durable", f: function () {
+      return Promise.all([demander("../Habitat-durable/", { method: "HEAD" }), demander("../Habitat-durable/catalogue.json")])
+        .then(function (r) {
+          if (r[0].status !== 200) return { statut: "attention", detail: "page injoignable (statut " + (r[0].status || r[0].erreur) + ")",
+            conseil: "Vérifie la publication GitHub Pages du dépôt Habitat-durable." };
+          if (r[1].status === 200 && r[1].donnees && r[1].donnees.activites) {
+            return { statut: "ok", detail: "page et catalogue publiés (" + r[1].donnees.activites.length + " activités)" };
+          }
+          return { statut: "info", detail: "page publiée ; catalogue pas encore publié (prévu au lot 3)" };
+        });
+    } },
+    { id: "horloge", nom: "Heure du poste", f: function () {
+      return demander(location.href.split("#")[0], { method: "HEAD" }).then(function (r) {
+        var date = r.entetes && r.entetes.get("Date");
+        if (!date) return { statut: "info", detail: "non vérifiable ici" };
+        var ecart = Math.round((Date.now() - r.ms / 2 - Date.parse(date)) / 60000);
+        if (Math.abs(ecart) > 5) return { statut: "attention", detail: "écart de " + ecart + " min avec l'heure du serveur",
+          conseil: "Remets le poste à l'heure : sinon une session peut sembler expirée trop tôt." };
+        return { statut: "ok", detail: "à l'heure" };
+      });
+    } }
+  ];
+
+  // ---------- affichage
+  var dernier = null;
+  function ligne(c) {
+    var li = document.createElement("li");
+    li.className = "controle";
+    li.setAttribute("data-controle", c.id);
+    li.innerHTML = '<span class="pastille attente">' + LIBELLES.attente + '</span><span class="nom"></span>' +
+      '<span class="detail"></span><span class="conseil"></span>';
+    li.querySelector(".nom").textContent = c.nom;
+    return li;
+  }
+  function afficher(li, r) {
+    var p = li.querySelector(".pastille");
+    p.className = "pastille " + r.statut;
+    p.textContent = LIBELLES[r.statut];
+    li.querySelector(".detail").textContent = r.detail || "";
+    li.querySelector(".conseil").textContent = r.conseil || "";
+  }
+  function rapport(p, resultats) {
+    var l = ["Diagnostic du suivi des élèves — " + new Date().toLocaleString("fr-FR"),
+      "Page : " + location.href.split("?")[0], "Projet : " + (p.url || "(absent)"), "Navigateur : " + navigator.userAgent, ""];
+    resultats.forEach(function (x) {
+      l.push("[" + LIBELLES[x.r.statut] + "] " + x.c.nom + (x.r.detail ? " — " + x.r.detail : ""));
+      if (x.r.conseil) l.push("    → " + x.r.conseil);
+    });
+    return l.join("\n");
+  }
+
+  function lancer() {
+    var p = { url: $("#url").value.trim().replace(/\/+$/, ""), cle: $("#cle").value.trim() };
+    var liste = $("#controles"), resultats = [], arret = false;
+    liste.innerHTML = "";
+    $("#resultats").hidden = false;
+    $("#rapport").hidden = true;
+    $("#copie-etat").textContent = "";
+    $("#bilan").className = "bilan";
+    $("#bilan").textContent = "Diagnostic en cours…";
+    $("#lancer").disabled = true;
+    var lignes = CONTROLES.map(function (c) { var li = ligne(c); liste.appendChild(li); return li; });
+    // l'un après l'autre : un contrôle bloquant (configuration) arrête les suivants
+    return CONTROLES.reduce(function (chaine, c, i) {
+      return chaine.then(function () {
+        if (arret && c.id !== "navigateur") {
+          var r0 = { statut: "info", detail: "non testé : corrige d'abord l'adresse et la clé" };
+          afficher(lignes[i], r0);
+          resultats.push({ c: c, r: r0 });
+          return null;
+        }
+        return Promise.resolve().then(function () { return c.f(p); }).catch(function (e) {
+          return { statut: "ko", detail: "erreur du diagnostic : " + (e && e.message) };
+        }).then(function (r) {
+          if (r.arret) arret = true;
+          afficher(lignes[i], r);
+          resultats.push({ c: c, r: r });
+        });
+      });
+    }, Promise.resolve()).then(function () {
+      var ko = resultats.filter(function (x) { return x.r.statut === "ko"; }).length;
+      var att = resultats.filter(function (x) { return x.r.statut === "attention"; }).length;
+      var b = $("#bilan");
+      if (ko) { b.className = "bilan ko"; b.textContent = ko + " problème" + (ko > 1 ? "s" : "") + " à résoudre."; }
+      else if (att) { b.className = "bilan attention"; b.textContent = "Utilisable, " + att + " point" + (att > 1 ? "s" : "") + " à vérifier."; }
+      else { b.className = "bilan ok"; b.textContent = "Ce poste est prêt."; }
+      dernier = rapport(p, resultats);
+      $("#rapport").value = dernier;
+      $("#lancer").disabled = false;
+    });
+  }
+
+  $("#form-diag").addEventListener("submit", function (e) { e.preventDefault(); lancer(); });
+  $("#copier").addEventListener("click", function () {
+    if (!dernier) return;
+    function repli() {
+      var t = $("#rapport");
+      t.hidden = false;
+      t.focus();
+      t.select();
+      $("#copie-etat").textContent = "Sélectionne le texte ci-dessous et copie-le (Ctrl+C).";
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(dernier).then(function () { $("#copie-etat").textContent = "Rapport copié."; }, repli);
+    } else repli();
+  });
+
+  // ---------- essai de connexion
+  function signalerSession() {
+    var u = Suivi.utilisateur(), m = $("#session-ouverte");
+    m.hidden = !u;
+    m.textContent = u ? "Une session est ouverte sur ce poste (" + u.prenom + " " + u.nom + ") : l'essai la fermera." : "";
+  }
+  signalerSession();
+  window.addEventListener("suivi:session", signalerSession);
+
+  $("#form-connexion").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var m = $("#message-connexion"), bouton = $("#essayer");
+    function dire(classe, texte) { m.className = "message " + classe; m.textContent = texte; }
+    if (!Suivi.demo.active()) {
+      var url = $("#url").value.trim().replace(/\/+$/, ""), cle = $("#cle").value.trim();
+      if (!url || !cle) return dire("ko", "Renseigne d'abord l'adresse et la clé du projet, plus haut.");
+      if (estSecrete(cle)) return dire("ko", "C'est la clé secrète : remplace-la par la clé publique.");
+      Suivi.configurer({ url: url, cle: cle });
+    }
+    bouton.disabled = true;
+    dire("", "Connexion…");
+    Suivi.connecter($("#identifiant").value, $("#mdp").value).then(function (u) {
+      var qui = u.prenom + " " + u.nom + " (" + (u.role === "prof" ? "professeur" : "élève" + (u.classe ? ", classe " + u.classe.nom : "")) + ")";
+      return Suivi.deconnecter().then(function () { dire("ok", "Connexion réussie : " + qui + ". Déconnecté aussitôt."); });
+    }, function (err) {
+      dire("ko", err.message + (err.code === "reseau" ? " Lance le diagnostic ci-dessus." : ""));
+    }).then(function () {
+      bouton.disabled = false;
+      $("#mdp").value = "";
+    });
+  });
+
+  if ($("#url").value && $("#cle").value) lancer();
+})();
+</script>
+</body>
+</html>

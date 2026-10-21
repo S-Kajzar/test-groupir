@@ -1,0 +1,73 @@
+/* Portail du suivi des élèves : charte des dépôts de cours (variables et polices du gabarit RDM). */
+:root{
+  --beton:#E3E5E0; --papier:#FFFFFF; --encre:#1C2530; --encre-2:#46525C;
+  --trait:#A5ADAA; --trait-fin:#D3D8D5;
+  --jaune:#F2B705; --jaune-pale:#FFF3C4;
+  --bleu:#1F5FA8; --bleu-pale:#E6EEF8;
+  --vert:#1B7A43; --vert-pale:#E2F1E7; --rouge:#B42318; --rouge-pale:#FBE6E4;
+  --orange:#B26A00; --orange-pale:#FCEFD8;
+  --f-titre:"Bahnschrift","DIN Alternate","DIN Condensed","Roboto Condensed","Arial Narrow",sans-serif;
+  --f-texte:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0; background:var(--beton); color:var(--encre); font:16px/1.55 var(--f-texte); font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit; color:inherit}
+:focus-visible{outline:3px solid var(--bleu); outline-offset:2px}
+a{color:var(--bleu)}
+.small{font-size:.9rem; color:var(--encre-2)}
+code{font-size:.92em; background:var(--beton); padding:0 4px; border-radius:2px; overflow-wrap:anywhere}
+
+/* ---------- mise en page ---------- */
+.entete{background:var(--encre); color:#fff; border-bottom:4px solid var(--jaune)}
+.entete .dedans{max-width:900px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+.entete .marque{font:700 1.15rem/1.1 var(--f-titre); letter-spacing:.01em; color:#fff; text-decoration:none}
+.entete .marque span{color:var(--jaune)}
+.page{max-width:900px; margin:0 auto; padding:24px 16px 48px}
+h1{font:700 clamp(1.6rem,4vw,2.3rem)/1.08 var(--f-titre); margin:0 0 8px; letter-spacing:-.01em}
+h2{font:700 1.35rem/1.15 var(--f-titre); margin:0 0 10px}
+.chapeau{color:var(--encre-2); margin:0 0 22px; max-width:68ch}
+.bloc{background:var(--papier); border:2px solid var(--encre); padding:16px 18px; margin:0 0 20px}
+.bloc > :last-child{margin-bottom:0}
+.bandeau-demo{background:var(--jaune-pale); border:1.5px solid var(--jaune); padding:8px 12px; margin:0 0 20px; font-size:.95rem}
+
+/* ---------- formulaires et boutons ---------- */
+.champ{display:grid; gap:4px; margin:0 0 12px}
+.champ label{font-weight:600}
+.champ input{width:100%; border:1.5px solid var(--trait); border-radius:2px; padding:8px 10px; background:#fff}
+.champ input:focus{border-color:var(--bleu)}
+.grille-2{display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:0 16px}
+.actions{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+.btn{border:1.5px solid var(--encre); background:var(--encre); color:#fff; padding:8px 16px; border-radius:2px; cursor:pointer; font-weight:600}
+.btn:hover{background:#2E3B47}
+.btn:disabled{background:#9AA2A8; border-color:#9AA2A8; cursor:not-allowed}
+.btn.secondaire{background:#fff; color:var(--encre)}
+.btn.secondaire:hover{background:var(--beton)}
+.message{margin:10px 0 0; padding:8px 12px; border-left:4px solid var(--trait)}
+.message:empty{display:none}
+.message.ok{border-color:var(--vert); background:var(--vert-pale)}
+.message.ko{border-color:var(--rouge); background:var(--rouge-pale)}
+.message.attention{border-color:var(--orange); background:var(--orange-pale)}
+
+/* ---------- liste de contrôles (diagnostic) ---------- */
+.controles{list-style:none; margin:0; padding:0}
+.controle{display:grid; grid-template-columns:auto 1fr; gap:2px 12px; padding:10px 0; border-top:1px solid var(--trait-fin)}
+.controle:first-child{border-top:0}
+.controle .nom{font-weight:600}
+.controle .detail{grid-column:2; color:var(--encre-2); font-size:.95rem; overflow-wrap:anywhere}
+.controle .conseil{grid-column:2; font-size:.95rem; margin-top:2px}
+.pastille{grid-row:1 / span 3; align-self:start; min-width:92px; text-align:center; font:700 .8rem/1 var(--f-titre);
+  text-transform:uppercase; letter-spacing:.04em; padding:6px 8px; border-radius:2px; border:1.5px solid}
+.pastille.ok{color:var(--vert); background:var(--vert-pale); border-color:var(--vert)}
+.pastille.ko{color:var(--rouge); background:var(--rouge-pale); border-color:var(--rouge)}
+.pastille.attention{color:var(--orange); background:var(--orange-pale); border-color:var(--orange)}
+.pastille.info,.pastille.attente{color:var(--encre-2); background:var(--beton); border-color:var(--trait)}
+.bilan{font:700 1.2rem/1.2 var(--f-titre); margin:0 0 12px}
+.bilan.ok{color:var(--vert)} .bilan.ko{color:var(--rouge)} .bilan.attention{color:var(--orange)}
+textarea.rapport{width:100%; min-height:9em; font:13px/1.4 ui-monospace,Consolas,monospace; border:1.5px solid var(--trait); padding:8px}
+
+@media (max-width:520px){
+  .bloc{padding:14px 12px}
+  .controle{grid-template-columns:1fr}
+  .pastille{grid-row:auto; justify-self:start; min-width:0}
+  .controle .detail,.controle .conseil{grid-column:1}
+}
