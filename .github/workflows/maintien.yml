@@ -1,0 +1,33 @@
+# Maintien du projet Supabase : un projet gratuit est mis en pause après 7 jours de faible activité (vacances).
+# Chaque jour, un appel à la fonction ping de la base, sans compte, l'en empêche.
+# Variables du dépôt (Settings > Secrets and variables > Actions > Variables) : SUPABASE_URL, SUPABASE_CLE_PUBLIQUE
+# (valeurs publiques, docs/INSTALLATION.md, étape 7). Sans elles, la tâche ne fait rien.
+# GitHub suspend les tâches planifiées d'un dépôt public resté 60 jours sans activité : la réactiver dans Actions.
+name: Maintien du projet Supabase
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Appel de la base
+        env:
+          URL: ${{ vars.SUPABASE_URL }}
+          CLE: ${{ vars.SUPABASE_CLE_PUBLIQUE }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$CLE" ]; then
+            echo "::notice::Variables SUPABASE_URL et SUPABASE_CLE_PUBLIQUE absentes : rien à faire (docs/INSTALLATION.md, étape 7)."
+            exit 0
+          fi
+          AUTH=()
+          case "$CLE" in eyJ*) AUTH=(-H "Authorization: Bearer $CLE") ;; esac
+          reponse=$(curl -fsS --retry 3 --retry-delay 20 -X POST "${URL%/}/rest/v1/rpc/ping" \
+            -H "apikey: $CLE" "${AUTH[@]}" -H "Content-Type: application/json" -d '{}')
+          echo "Réponse de la base : $reponse"
+          [ "$reponse" = '"ok"' ]

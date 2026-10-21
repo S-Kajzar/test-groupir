@@ -87,7 +87,8 @@ Navigateur de l'élève ou du prof
 
 | Chemin | Rôle |
 |---|---|
-| `index.html` | connexion (identifiant, mot de passe) ; redirige vers `eleve.html` ou `prof.html`, ou vers `?retour=` |
+| `index.html` | connexion (identifiant, mot de passe) ; redirige vers `eleve.html` ou `prof.html`, ou vers `?retour=` (page d'attente au lot 1) |
+| `config.js` | `window.__SUIVI__` : adresse du projet et clé publique, renseignées après l'installation |
 | `eleve.html`, `prof.html` | espaces élève et prof (§ 7) |
 | `diagnostic.html` | test du poste et du réseau (§ 8) |
 | `portail.css`, `portail.js` | charte et logique du portail |
@@ -101,7 +102,7 @@ Navigateur de l'élève ou du prof
 | `docs/` | `INSTALLATION.md`, `GUIDE-PROF.md`, `FICHE-TRAITEMENT.md`, `INFORMATION-FAMILLES.md` |
 | `tests/` | tests Node et Playwright |
 | `.github/workflows/static.yml` | publication Pages (copie de celui d'Habitat-durable) |
-| `.github/workflows/maintien.yml` | appel tous les 3 jours pour éviter la mise en pause du projet gratuit (§ 8) |
+| `.github/workflows/maintien.yml` | appel quotidien pour éviter la mise en pause du projet gratuit (§ 8) |
 | `README.md`, `NOTE-DE-LIVRAISON.md` | dans le style des dépôts de cours |
 
 Les deux fichiers de `module/` sont recopiés **à l'identique** dans `Habitat-durable/src/`. Chaque dépôt vérifie leur
@@ -157,7 +158,7 @@ des erreurs en français (`{"erreur": "…"}`). Elle autorise l'origine `https:/
 
 | Action | Entrée | Sortie |
 |---|---|---|
-| `creer_eleves` | `classe_id`, `eleves: [{prenom, nom}]` (40 au plus) | `[{id, prenom, nom, identifiant, mot_de_passe}]` |
+| `creer_eleves` | `classe_id`, `eleves: [{prenom, nom}]` (40 au plus) | `{eleves: [{id, prenom, nom, identifiant, mot_de_passe}], erreurs: [{ligne, prenom, nom, erreur}]}` : une ligne en échec n'empêche pas les autres |
 | `reinitialiser` | `eleve_id` | `{identifiant, mot_de_passe}` |
 | `supprimer_eleve` | `eleve_id` | `{ok: true}` |
 | `supprimer_classe` | `classe_id` | `{ok: true, eleves_supprimes: n}` |
@@ -309,8 +310,8 @@ précédent.
   une classe entière sort par la même IP du lycée. Elle est à relever (par exemple à 300) dans Authentication > Rate
   Limits. Les inscriptions publiques sont à désactiver.
 - **Mise en pause** : un projet gratuit est mis en pause après 7 jours de faible activité, ce qui arrive pendant les
-  vacances. `maintien.yml` interroge la base tous les 3 jours (adresse et clé publique en *variables* Actions du
-  dépôt). Restent à signaler dans le guide : GitHub désactive les tâches planifiées d'un dépôt public après 60 jours
+  vacances. `maintien.yml` interroge la base chaque jour (adresse et clé publique en *variables* Actions du dépôt).
+  Restent à signaler dans le guide : GitHub désactive les tâches planifiées d'un dépôt public après 60 jours
   sans activité, et un projet en pause se relance depuis le tableau de bord.
 - **Jamais** de clé `service_role`, de mot de passe ou de jeton dans un dépôt, un test ou un journal.
 
@@ -350,7 +351,7 @@ requests de test-groupir sont fusionnées par toi, car GitHub Pages publie `main
 
 | Lot | Contenu | À faire par toi ensuite | État |
 |---|---|---|---|
-| 1. Fondations | `schema.sql`, fonction `gestion-eleves`, `module/suivi.js` (deux backends), `diagnostic.html`, workflows `static.yml` et `maintien.yml`, `docs/INSTALLATION.md`, tests unitaires, README | Créer le projet Supabase (Europe) et suivre `INSTALLATION.md` ; activer Pages (source : GitHub Actions) ; donner l'adresse du projet et la clé publique ; lancer le diagnostic sur un poste du lycée | à faire |
+| 1. Fondations | `schema.sql`, fonction `gestion-eleves`, `module/suivi.js` (deux backends), `diagnostic.html`, workflows `static.yml` et `maintien.yml`, `docs/INSTALLATION.md`, tests unitaires, README | Créer le projet Supabase (Europe) et suivre `INSTALLATION.md` ; activer Pages (source : GitHub Actions) ; donner l'adresse du projet et la clé publique ; lancer le diagnostic sur un poste du lycée | **fait** (49 tests verts) — en attente de l'installation |
 | 2. Portail et classes | Connexion, sessions, onglet Classes complet, fiches, « Mes cours » ; tests Playwright | Créer une classe de recette de 3 élèves fictifs, imprimer une fiche, se connecter avec | à faire |
 | 3. Habitat-durable | Compétences, `catalogue.json`, `suivi-gabarit.js`, intégration dans `generer.py`, tests ; copie de recette dans `test-groupir/essai/habitat-durable/` (avec `depots.json` pointé dessus) | Faire un exercice d'entraînement et un examen en élève fictif sur la page d'essai | à faire |
 | 4. Tableaux de bord | Onglets Notes, Compétences, Analyse, Fiche élève, copie détaillée, exports ; Mes résultats et Mes compétences ; tests | Vérifier les tableaux avec les données de recette | à faire |

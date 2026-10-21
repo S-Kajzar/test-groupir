@@ -1,0 +1,13 @@
+{
+  "name": "suivi-eleves-portail",
+  "private": true,
+  "description": "Portail du suivi des élèves : comptes, classes, résultats et compétences des dépôts de cours",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "playwright": "1.56.1"
+  }
+}
